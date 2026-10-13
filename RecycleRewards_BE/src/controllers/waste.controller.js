@@ -18,7 +18,13 @@ export function studentDashboard(req, res) {
 }
 
 export function submitWaste(req, res) {
-  const { studentName, studentId, wasteType, confidence, imageDataUrl } = req.body;
+  const { studentName, studentId, wasteType, imageDataUrl, videoFrames } = req.body;
   if (!studentName || !studentId || !wasteType) return res.status(400).json({ message: 'Thiếu thông tin vật phẩm.' });
-  res.status(201).json(createSubmission({ studentName, studentId, wasteType, confidence: Number(confidence) || 88, imageDataUrl }));
+  if (!Array.isArray(videoFrames) || videoFrames.length !== 3 || videoFrames.some((frame) => typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,'))) {
+    return res.status(400).json({ message: 'Video cần có đủ 3 khung hình JPEG hợp lệ.' });
+  }
+
+  const confidence = videoFrames.length === 3 ? 88 : 0;
+  if (confidence < 80) return res.status(422).json({ message: 'Độ tin cậy chưa đạt ngưỡng 80%. Vui lòng quay lại video rõ hơn.' });
+  res.status(201).json(createSubmission({ studentName, studentId, wasteType, confidence, imageDataUrl, videoFrames }));
 }

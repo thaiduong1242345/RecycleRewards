@@ -84,6 +84,14 @@ label { display: block; font-size: 12px; font-weight: 700; margin: 17px 0 7px; c
 .toast-info { background: #285c48; }
 .toast button { flex: 0 0 auto; width: 27px; height: 27px; border: 0; border-radius: 7px; color: inherit; background: #ffffff26; font-size: 19px; line-height: 1; }
 .toast button:focus-visible, .mobile-nav button:focus-visible, .sidebar nav button:focus-visible, .btn:focus-visible { outline: 3px solid #50b78b; outline-offset: 2px; }
+.camera-preview { display: block; width: 100%; max-height: 320px; margin-bottom: 12px; border-radius: 10px; background: #14231c; object-fit: cover; }
+.camera-preview.hidden { display: none; }
+.capture-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.frame-status { padding: 24px 10px; color: #718178; text-align: center; font-size: 11px; }
+.frame-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.frame-strip figure { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #e8f0eb; border-radius: 8px; background: #f5f8f6; }
+.frame-strip img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.frame-strip figcaption { padding: 6px; color: #718178; text-align: center; font-size: 9px; }
 @media (max-width: 800px) {
   .chart-grid { grid-template-columns: minmax(0, 1fr); }
   .toast { right: 16px; bottom: calc(82px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); }

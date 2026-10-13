@@ -52,15 +52,68 @@ function Dashboard({ session, go }) {
   return <><Header eyebrow="HÀNH TRÌNH XANH CỦA BẠN" title={'Xin chào, ' + firstName + '!'} subtitle="Mỗi món đồ tái chế là một bước nhỏ cho môi trường." /><section className="score-banner"><div><em>ĐIỂM XANH CỦA BẠN</em><strong>{dashboard.totalPoints} <small>điểm</small></strong><p>Cứ tiếp tục nhé, bạn đang làm rất tốt!</p></div><Button variant="white" onClick={() => go('/student/scanner')}>⌁ Quét vật phẩm →</Button></section><section className="metric-grid"><Metric icon="♻" value={dashboard.totalSubmissions} label="Vật phẩm đã gửi" /><Metric icon="✓" value={dashboard.approvedCount} label="Được xác nhận" /><Metric icon="◷" value={dashboard.pendingCount} label="Đang chờ duyệt" /></section>{data && <section className="surface dashboard-stats"><div className="section-heading"><div><h2>Thống kê tái chế</h2><p>Tổng quan trạng thái các vật phẩm bạn đã gửi</p></div><span className="approval-rate">{approvalRate}% <small>được duyệt</small></span></div><div className="status-bar" role="img" aria-label={'Đã duyệt ' + approved + ', chờ duyệt ' + pending + ', từ chối ' + rejected}>{total > 0 && <><span className="approved-segment" style={{ width: (approved / total * 100) + '%' }} /><span className="pending-segment" style={{ width: (pending / total * 100) + '%' }} /><span className="rejected-segment" style={{ width: (rejected / total * 100) + '%' }} /></>}</div><div className="status-legend"><span><i className="approved-dot" />Đã duyệt <b>{approved}</b></span><span><i className="pending-dot" />Chờ duyệt <b>{pending}</b></span><span><i className="rejected-dot" />Từ chối <b>{rejected}</b></span></div></section>}<section className="surface"><div className="section-heading"><div><h2>Hoạt động gần đây</h2><p>Theo dõi hành trình xanh của bạn</p></div><button className="text-button" onClick={() => go('/student/history')}>Xem tất cả →</button></div>{error ? <ErrorState error={error} /> : dashboard.recent.length ? dashboard.recent.map((item) => <Row key={item.id} item={item} />) : <Empty title="Chưa có hoạt động nào" text="Hãy gửi vật phẩm tái chế đầu tiên." />}</section></>;
 }
 function Scanner({ session, go, notify }) {
-  const [image, setImage] = useState(''); const [fileName, setFileName] = useState(''); const [type, setType] = useState(''); const [confidence, setConfidence] = useState(0); const [sending, setSending] = useState(false); const input = useRef(null);
-  function choose(file) {
-    if (!file || !file.type.startsWith('image/')) return notify('Vui lòng chọn một tệp hình ảnh.', 'error');
-    const reader = new FileReader(); reader.onload = () => { const name = file.name.toLowerCase(); setImage(String(reader.result)); setFileName(file.name); setType(name.includes('giay') || name.includes('paper') ? 'Giấy tái chế' : name.includes('lon') || name.includes('can') ? 'Lon nhôm' : name.includes('thuy') || name.includes('glass') ? 'Chai thủy tinh' : 'Chai nhựa PET'); setConfidence(88 + file.size % 10); }; reader.readAsDataURL(file);
+  const [frames, setFrames] = useState([]); const [fileName, setFileName] = useState(''); const [type, setType] = useState(''); const [sending, setSending] = useState(false); const [recording, setRecording] = useState(false); const [cameraOn, setCameraOn] = useState(false); const [processing, setProcessing] = useState(false);
+  const videoInput = useRef(null); const videoRef = useRef(null); const streamRef = useRef(null); const recorderRef = useRef(null); const recordTimerRef = useRef(null);
+  function stopCamera() {
+    clearTimeout(recordTimerRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+    streamRef.current = null; setCameraOn(false); setRecording(false);
+  }
+  useEffect(() => () => {
+    clearTimeout(recordTimerRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+  }, []);
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) return notify('Trình duyệt không hỗ trợ camera. Hãy chọn video có sẵn.', 'error');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      streamRef.current = stream; videoRef.current.srcObject = stream; await videoRef.current.play(); setCameraOn(true);
+    } catch { notify('Không thể mở camera. Hãy cấp quyền truy cập hoặc chọn video có sẵn.', 'error'); }
+  }
+  function startRecording() {
+    if (!streamRef.current || !window.MediaRecorder) return notify('Trình duyệt không hỗ trợ quay video trực tiếp.', 'error');
+    const mimeType = ['video/webm;codecs=vp9', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
+    const chunks = []; const recorder = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined);
+    recorderRef.current = recorder;
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    recorder.onstop = () => {
+      const file = new File(chunks, 'camera-video.webm', { type: recorder.mimeType || 'video/webm' });
+      stopCamera(); processVideo(file);
+    };
+    recorder.start(); setRecording(true); recordTimerRef.current = setTimeout(() => recorder.state === 'recording' && recorder.stop(), 4000);
+  }
+  async function processVideo(file) {
+    if (!file || !file.type.startsWith('video/')) return notify('Vui lòng chọn tệp video.', 'error');
+    if (file.size > 25 * 1024 * 1024) return notify('Video cần nhỏ hơn 25 MB.', 'error');
+    setProcessing(true); setFrames([]); setFileName(file.name);
+    const videoUrl = URL.createObjectURL(file); const video = document.createElement('video'); video.muted = true; video.preload = 'metadata'; video.src = videoUrl;
+    try {
+      await new Promise((resolve, reject) => { video.onloadedmetadata = resolve; video.onerror = () => reject(new Error('Không thể đọc video này.')); });
+      if (!Number.isFinite(video.duration) || video.duration < 1 || video.duration > 30) throw new Error('Video cần dài từ 1 đến 30 giây.');
+      const times = [0.2, 0.5, 0.8].map((position) => Math.max(0.05, Math.min(video.duration - 0.05, video.duration * position)));
+      const captured = [];
+      for (const time of times) {
+        await new Promise((resolve) => { video.onseeked = resolve; video.currentTime = time; });
+        const scale = Math.min(1, 640 / video.videoWidth); const canvas = document.createElement('canvas');
+        canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        captured.push(canvas.toDataURL('image/jpeg', 0.68));
+      }
+      setFrames(captured);
+      const name = file.name.toLowerCase();
+      setType(name.includes('giay') || name.includes('paper') ? 'Giấy tái chế' : name.includes('lon') || name.includes('can') ? 'Lon nhôm' : name.includes('thuy') || name.includes('glass') ? 'Chai thủy tinh' : '');
+    } catch (error) { setFrames([]); notify(error.message || 'Không thể tách khung hình từ video.', 'error'); }
+    finally { URL.revokeObjectURL(videoUrl); setProcessing(false); }
   }
   async function send() {
-    setSending(true); try { await authService.createSubmission({ studentName: session.name, studentId: session.studentId, wasteType: type, confidence, imageDataUrl: image }); notify('Đã gửi vật phẩm! Điểm sẽ được cộng sau khi duyệt.', 'success'); go('/student/history'); } catch (e) { notify(e.message, 'error'); } finally { setSending(false); }
+    setSending(true);
+    try {
+      const submission = await authService.createSubmission({ studentName: session.name, studentId: session.studentId, wasteType: type, imageDataUrl: frames[0], videoFrames: frames });
+      notify(`Đã gửi vật phẩm! Độ tin cậy demo ${submission.confidence}%. Điểm sẽ được cộng sau khi duyệt.`, 'success'); go('/student/history');
+    } catch (error) { notify(error.message, 'error'); }
+    finally { setSending(false); }
   }
-  return <><Header eyebrow="NHẬN DIỆN TÁI CHẾ" title="Quét vật phẩm" subtitle="Tải ảnh lên để AI demo gợi ý loại vật liệu phù hợp." /><section className="scanner-grid"><div className="surface upload-surface"><input ref={input} className="visually-hidden" type="file" accept="image/*" onChange={(e) => choose(e.target.files && e.target.files[0])} /><div className="drop-zone" onClick={() => input.current.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); choose(e.dataTransfer.files[0]); }}>{image ? <img src={image} alt="Vật phẩm đã chọn" /> : <><b>⌁</b><strong>Kéo ảnh vào đây</strong><span>hoặc chọn hình ảnh từ thiết bị</span><Button type="button" variant="outline">⇧ Chọn hình ảnh</Button></>}</div>{image && <div className="uploaded-file"><span>▣ {fileName}</span><button onClick={() => { setImage(''); setType(''); }}>×</button></div>}</div><aside className="surface scan-result"><em>KẾT QUẢ DEMO</em><h2>Vật phẩm của bạn</h2><p>AI nhận diện chỉ mô phỏng, hãy kiểm tra lại trước khi gửi.</p><label>Loại vật phẩm</label><select value={type} onChange={(e) => setType(e.target.value)}><option value="">Chọn loại vật phẩm</option>{wasteTypes.map((item) => <option key={item}>{item}</option>)}</select><div className="result-stats"><span>Độ tin cậy demo<b>{confidence ? String(confidence) + '%' : '—'}</b></span><span>Điểm ước tính<b>+5 điểm</b></span></div><Button className="wide" disabled={!image || !type || sending} onClick={send}>{sending ? 'Đang gửi...' : 'Gửi để duyệt →'}</Button><small className="secure">♙ Điểm xanh chỉ được cộng sau khi giáo viên xác nhận vật phẩm.</small></aside></section></>;
+  return <><Header eyebrow="NHẬN DIỆN TÁI CHẾ" title="Quay video rác" subtitle="Quay 4 giây hoặc tải video lên để trích xuất khung hình." /><section className="scanner-grid"><div className="surface upload-surface"><video ref={videoRef} className={cameraOn ? 'camera-preview' : 'camera-preview hidden'} autoPlay muted playsInline /><div className="capture-actions"><Button variant="outline" onClick={cameraOn ? stopCamera : startCamera}>{cameraOn ? 'Tắt camera' : 'Mở camera'}</Button><Button disabled={!cameraOn || recording || processing} onClick={startRecording}>{recording ? 'Đang quay 4 giây...' : '● Quay video 4 giây'}</Button><Button variant="outline" disabled={processing} onClick={() => videoInput.current.click()}>Chọn video</Button><input ref={videoInput} className="visually-hidden" type="file" accept="video/*" onChange={(event) => { processVideo(event.target.files?.[0]); event.target.value = ''; }} /></div>{processing ? <div className="frame-status">Đang tách khung hình trên thiết bị...</div> : frames.length ? <><div className="frame-strip">{frames.map((frame, index) => <figure key={index}><img src={frame} alt={`Khung hình ${index + 1}`} /><figcaption>Frame {index + 1}</figcaption></figure>)}</div><div className="uploaded-file"><span>{fileName} · {frames.length} khung hình</span><button aria-label="Xóa video đã chọn" onClick={() => { setFrames([]); setFileName(''); setType(''); }}>×</button></div></> : <div className="drop-zone"><b>▣</b><strong>Khung hình video sẽ xuất hiện ở đây</strong><span>3 frame JPEG được tạo bằng Canvas, không tải video gốc lên máy chủ.</span></div>}</div><aside className="surface scan-result"><em>KIỂM TRA DEMO</em><h2>Vật phẩm của bạn</h2><p>AI hiện là mô phỏng; backend chỉ đưa bài hợp lệ vào hàng chờ từ 80%.</p><label>Loại vật phẩm</label><select value={type} onChange={(event) => setType(event.target.value)}><option value="">Chọn loại vật phẩm</option>{wasteTypes.map((item) => <option key={item}>{item}</option>)}</select><div className="result-stats"><span>Số khung hình<b>{frames.length || '—'}</b></span><span>Ngưỡng demo<b>80%</b></span></div><Button className="wide" disabled={frames.length !== 3 || !type || sending || processing} onClick={send}>{sending ? 'Đang gửi...' : 'Gửi AI kiểm tra →'}</Button><small className="secure">♙ Điểm xanh chỉ được cộng sau khi giáo viên xác nhận vật phẩm.</small></aside></section></>;
 }
 function History({ session }) {
   const [items, setItems] = useState([]); const [query, setQuery] = useState(''); const [filter, setFilter] = useState('all'); const [error, setError] = useState('');

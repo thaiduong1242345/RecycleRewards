@@ -9,7 +9,7 @@ export const submissions = [
 ];
 
 export const createSubmission = (payload) => {
-  const submission = { id: `rr-${Date.now()}`, status: 'pending', points: 5, submittedAt: new Date().toISOString(), ...payload };
+  const submission = { id: `rr-${Date.now()}`, status: 'pending', points: 5, submittedAt: new Date().toISOString(), videoFrames: [], ...payload };
   submissions.unshift(submission);
   return submission;
 };
