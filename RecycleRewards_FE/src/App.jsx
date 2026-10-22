@@ -73,10 +73,11 @@ function Scanner({ go, notify }) {
   const [stream, setStream] = useState(null);
   const [detections, setDetections] = useState([]);
   const [type, setType] = useState('');
-  const [manualType, setManualType] = useState(false);
   const [confidence, setConfidence] = useState(0);
-  const [frames, setFrames] = useState([]);
-  const [image, setImage] = useState('');
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState('');
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [recording, setRecording] = useState(false);
   const [status, setStatus] = useState('Camera chưa được bật.');
   const [cameraError, setCameraError] = useState('');
   const [sending, setSending] = useState(false);
@@ -90,18 +91,29 @@ function Scanner({ go, notify }) {
   const requestRef = useRef(null);
   const inFlight = useRef(false);
   const detectionsRef = useRef([]);
+  const manualTypeRef = useRef(false);
+  const recorderRef = useRef(null);
+  const recordTimerRef = useRef(null);
+  const recordedAtRef = useRef('');
+  const recordingStartedAtRef = useRef(0);
+  const previewUrlRef = useRef('');
 
   const stopCamera = () => {
     clearInterval(intervalRef.current);
-    clearInterval(frameIntervalRef.current);
+    clearTimeout(recordTimerRef.current);
     requestRef.current?.abort();
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (video.current) video.current.srcObject = null;
     inFlight.current = false;
     setStream(null);
   };
 
-  useEffect(() => () => stopCamera(), []);
+  useEffect(() => () => {
+    stopCamera();
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
 
   useEffect(() => {
     const canvas = overlay.current;
@@ -151,7 +163,7 @@ function Scanner({ go, notify }) {
         setConfidence(best.confidence);
         // Keep the form aligned with the latest YOLO result unless the user
         // deliberately selects a different class from the dropdown.
-        if (!manualType) setType(best.label);
+        if (!manualTypeRef.current) setType(best.label);
       } else {
         setConfidence(0);
       }
@@ -171,10 +183,17 @@ function Scanner({ go, notify }) {
       setCameraError('Trình duyệt không hỗ trợ webcam. Hãy dùng Chrome hoặc Edge qua HTTPS.');
       return;
     }
+    let camera;
     try {
       setCameraError('');
       setStatus('Đang mở camera...');
-      const camera = await navigator.mediaDevices.getUserMedia({
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = '';
+      setRecordedBlob(null);
+      setVideoPreviewUrl('');
+      setVideoDuration(0);
+      manualTypeRef.current = false;
+      camera = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
@@ -185,15 +204,44 @@ function Scanner({ go, notify }) {
       await video.current.play();
       const ratio = video.current.videoWidth / video.current.videoHeight;
       setPreviewRatio(`${ratio} / 1`);
+
+      // Record one compact WebM evidence video while detection continues on
+      // canvas. This replaces the former 30-image Base64 JSON upload, which
+      // could exceed Express/Nginx request-size limits and cause HTTP 413.
+      if (!window.MediaRecorder) throw new Error('Trình duyệt không hỗ trợ quay video WebM. Hãy dùng Chrome hoặc Edge mới nhất.');
+      const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        .find((candidate) => MediaRecorder.isTypeSupported(candidate));
+      if (!mimeType) throw new Error('Trình duyệt không hỗ trợ định dạng video WebM.');
+      const chunks = [];
+      const recorder = new MediaRecorder(camera, { mimeType, videoBitsPerSecond: 800000 });
+      recorderRef.current = recorder;
+      recordedAtRef.current = new Date().toISOString();
+      recordingStartedAtRef.current = Date.now();
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const duration = Math.min(30, Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000)));
+        if (blob.size) {
+          const objectUrl = URL.createObjectURL(blob);
+          if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+          previewUrlRef.current = objectUrl;
+          setRecordedBlob(blob);
+          setVideoPreviewUrl(objectUrl);
+          setVideoDuration(duration);
+        }
+        setRecording(false);
+        recorderRef.current = null;
+      };
+      recorder.start(1000);
+      setRecording(true);
       intervalRef.current = window.setInterval(detectFrame, 100);
-      frameIntervalRef.current = window.setInterval(() => {
-        if (!capture.current?.width || !detectionsRef.current.length) return;
-        const dataUrl = capture.current.toDataURL('image/jpeg', 0.8);
-        setImage(dataUrl);
-        setFrames((current) => current.length < 30 ? [...current, dataUrl] : current);
-      }, 1000);
+      // Cap evidence recordings at 30 seconds to keep upload size predictable.
+      recordTimerRef.current = window.setTimeout(stopCamera, 30000);
       setStatus('Đang nhận diện thời gian thực...');
     } catch (error) {
+      camera?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setStream(null);
       const message = error.name === 'NotAllowedError'
         ? 'Bạn đã từ chối quyền camera. Hãy cấp quyền rồi thử lại.'
         : 'Không thể mở camera. Kiểm tra thiết bị hoặc ứng dụng đang dùng camera.';
@@ -204,27 +252,25 @@ function Scanner({ go, notify }) {
 
   const resetScan = () => {
     setDetections([]);
-    setFrames([]);
-    setImage('');
     setType('');
-    setManualType(false);
+    manualTypeRef.current = false;
     setConfidence(0);
     setStatus('Sẵn sàng quét lại.');
   };
 
   async function send() {
-    if (frames.length < 3 || !type) return;
+    if (!recordedBlob || !type) return;
     setSending(true);
     try {
-      const ai = await authService.checkAi(confidence, frames);
+      const ai = await authService.checkAi(confidence, []);
       if (!ai.accepted) throw new Error(ai.message);
-      const uploaded = await authService.uploadFrames(frames);
+      const uploaded = await authService.uploadVideo(recordedBlob, videoDuration, recordedAtRef.current);
       await authService.createSubmission({
         wasteType: type,
         confidence,
-        imageDataUrl: image,
-        imageUrl: uploaded.frameUrls[0],
-        frameUrls: uploaded.frameUrls,
+        videoUrl: uploaded.videoUrl,
+        videoRecordedAt: uploaded.recordedAt,
+        videoDurationSec: uploaded.duration,
       });
       notify('Đã gửi vật phẩm! Điểm sẽ được cộng sau khi duyệt.', 'success');
       stopCamera();
@@ -241,29 +287,28 @@ function Scanner({ go, notify }) {
       <div className="surface upload-surface">
         <div className="drop-zone yolo-drop-zone">
           <div className="camera-stage" style={{ aspectRatio: previewRatio }}>
-            <video ref={video} className={stream ? 'camera-preview' : 'camera-preview camera-hidden'} autoPlay muted playsInline />
+            <video ref={video} src={!stream ? videoPreviewUrl : undefined} className={stream || videoPreviewUrl ? 'camera-preview' : 'camera-preview camera-hidden'} autoPlay={Boolean(stream)} muted={Boolean(stream)} controls={!stream && Boolean(videoPreviewUrl)} playsInline />
             <canvas ref={overlay} className={stream ? 'detection-overlay' : 'detection-overlay camera-hidden'} aria-label="Khung nhận diện YOLOv8" />
-            {!stream && <div className="camera-placeholder"><b>⌁</b><strong>Camera sẵn sàng</strong><span>Bật camera để bắt đầu nhận diện rác.</span></div>}
+            {!stream && !videoPreviewUrl && <div className="camera-placeholder"><b>⌁</b><strong>Camera sẵn sàng</strong><span>Bật camera để bắt đầu nhận diện rác.</span></div>}
           </div>
-          <div className="prediction-badge"><strong>{status}</strong><span>{confidence ? Math.round(confidence * 100) + '%' : '—'}</span></div>
+          <div className="prediction-badge"><strong>{status}</strong><span>{recording ? '● REC' : confidence ? Math.round(confidence * 100) + '%' : videoPreviewUrl ? 'Sẵn sàng gửi' : '—'}</span></div>
           {cameraError && <div className="error-state">{cameraError}</div>}
           {!stream
-            ? <Button type="button" variant="outline" onClick={startCamera}>⇥ Bật camera</Button>
-            : <><Button type="button" variant="danger" onClick={stopCamera}>■ Dừng camera</Button><Button type="button" variant="outline" onClick={resetScan}>↻ Quét lại</Button></>}
+            ? <Button type="button" variant="outline" onClick={startCamera}>{videoPreviewUrl ? '↻ Quay lại' : '⇥ Bật camera'}</Button>
+            : <><Button type="button" variant="danger" onClick={stopCamera}>■ Dừng và xem trước</Button><Button type="button" variant="outline" onClick={resetScan}>↻ Xóa kết quả</Button></>}
         </div>
         <canvas ref={capture} className="capture-canvas" />
-        {frames.length > 0 && <div className="frame-strip">{frames.map((frame, index) => <img key={`${index}-${frame.slice(-12)}`} src={frame} alt={`Frame xác nhận ${index + 1}`} />)}</div>}
       </div>
       <aside className="surface scan-result">
         <em>YOLOV8 · FASTAPI</em><h2>Vật phẩm của bạn</h2>
         <p>{detections.length ? `${detections.length} vật thể được phát hiện trong frame mới nhất.` : 'Đưa một vật thể vào giữa khung hình.'}</p>
         <label>Loại vật phẩm</label>
-        <select value={type} onChange={(event) => { setType(event.target.value); setManualType(true); }}>
+        <select value={type} onChange={(event) => { setType(event.target.value); manualTypeRef.current = true; }}>
           <option value="">Chọn loại vật phẩm</option>
           {wasteTypes.map((item) => <option key={item} value={item}>{wasteLabel(item)}</option>)}
         </select>
-        <div className="result-stats"><span>Độ tin cậy<b>{confidence ? Math.round(confidence * 100) + '%' : '—'}</b></span><span>Frame<b>{frames.length}/30</b></span></div>
-        <Button className="wide" disabled={frames.length < 3 || !type || sending} onClick={send}>{sending ? 'Đang kiểm tra và gửi...' : 'Check-AI và gửi →'}</Button>
+        <div className="result-stats"><span>Độ tin cậy<b>{confidence ? Math.round(confidence * 100) + '%' : '—'}</b></span><span>Video<b>{videoDuration ? `${videoDuration}s` : '—'}</b></span></div>
+        <Button className="wide" disabled={!recordedBlob || !type || sending} onClick={send}>{sending ? 'Đang upload video...' : 'Gửi video đã quét →'}</Button>
         <small className="secure">Chỉ bài đạt confidence từ 0.5 mới được chuyển vào trạng thái pending.</small>
       </aside>
     </section></>;
