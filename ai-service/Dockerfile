@@ -11,7 +11,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 COPY ai-service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# The default PyPI Torch package may pull CUDA/NVIDIA libraries (several GB).
+# This EC2 deployment is CPU-only, so install the substantially smaller CPU
+# wheels first. Ultralytics then reuses this compatible Torch installation.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+      torch==2.5.1 torchvision==0.20.1 \
+    && pip install --no-cache-dir -r requirements.txt
 COPY ai-service/app ./app
 COPY RecycleRewards_BE/models/yolov8-based.pt /app/models/yolov8-based.pt
 
