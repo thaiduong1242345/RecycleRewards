@@ -108,6 +108,79 @@ label { display: block; font-size: 12px; font-weight: 700; margin: 17px 0 7px; c
 .toast-info { background: #285c48; }
 .toast button { flex: 0 0 auto; width: 27px; height: 27px; border: 0; border-radius: 7px; color: inherit; background: #ffffff26; font-size: 19px; line-height: 1; }
 .toast button:focus-visible, .mobile-nav button:focus-visible, .sidebar nav button:focus-visible, .btn:focus-visible { outline: 3px solid #50b78b; outline-offset: 2px; }
+.rewards-header { align-items: center; }
+.rewards-header > .btn { white-space: nowrap; }
+.rewards-surface { min-width: 0; padding: 20px 0 0; overflow: hidden; }
+.rewards-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 22px 17px; }
+.rewards-toolbar h2 { margin: 0; color: #263b30; font-size: 14px; }
+.rewards-toolbar p { margin: 4px 0 0; color: #819087; font-size: 10px; }
+.rewards-filters { display: flex; gap: 9px; width: min(100%, 470px); }
+.rewards-filters input { min-width: 150px; }
+.rewards-filters select { width: 175px; flex: 0 0 175px; }
+.rewards-table-wrap { width: 100%; overflow-x: auto; }
+.rewards-table { width: 100%; min-width: 980px; border-collapse: collapse; text-align: left; }
+.rewards-table th { padding: 11px 12px; color: #819087; background: #f7faf8; font-size: 9px; font-weight: 700; white-space: nowrap; }
+.rewards-table th:first-child, .rewards-table td:first-child { padding-left: 22px; }
+.rewards-table td { padding: 12px; border-bottom: 1px solid #edf2ef; color: #52665a; font-size: 10px; vertical-align: middle; }
+.rewards-table tbody tr:last-child td { border-bottom: 0; }
+.reward-index { color: #8a9890 !important; }
+.reward-name-cell { display: flex; align-items: center; gap: 9px; min-width: 150px; }
+.reward-name-cell strong { max-width: 125px; color: #263b30; font-size: 10px; line-height: 1.5; }
+.reward-image { flex: 0 0 42px; width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; color: #188b62; background: #eaf6ef; border-radius: 8px; }
+.reward-image img { width: 100%; height: 100%; object-fit: cover; }
+.reward-image span { font-size: 19px; }
+.reward-description { max-width: 200px; line-height: 1.5; }
+.reward-points { color: #087a55 !important; font-weight: 700; white-space: nowrap; }
+.reward-points small { font-size: 9px; font-weight: 500; }
+.reward-status { display: inline-flex; align-items: center; gap: 6px; color: #087a55; white-space: nowrap; }
+.reward-status i { width: 7px; height: 7px; border-radius: 50%; background: #12a875; }
+.reward-status.inactive { color: #79867e; }
+.reward-status.inactive i { background: #aab4ae; }
+.reward-date { white-space: nowrap; }
+.reward-actions { display: flex; gap: 8px; white-space: nowrap; }
+.reward-actions button { padding: 4px 0; border: 0; color: #087a55; background: transparent; font-size: 10px; font-weight: 700; }
+.reward-actions button:hover { text-decoration: underline; }
+.reward-actions .delete-action { color: #b94d44; }
+.rewards-pagination { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 22px; border-top: 1px solid #edf2ef; color: #819087; font-size: 10px; }
+.rewards-pagination > div { display: flex; align-items: center; gap: 11px; }
+.rewards-pagination button { width: 29px; height: 29px; border: 1px solid #e1eae4; border-radius: 7px; color: #456052; background: white; }
+.rewards-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.rewards-state { min-height: 210px; display: grid; align-content: center; justify-items: center; gap: 9px; padding: 25px; color: #819087; text-align: center; font-size: 11px; }
+.rewards-state strong { color: #31483c; font-size: 13px; }
+.rewards-state .error-state { margin: 0; }
+.rewards-backdrop { overflow-y: auto; }
+.rewards-dialog { max-height: calc(100vh - 40px); overflow-y: auto; }
+.reward-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.reward-form-grid label { min-width: 0; }
+.reward-form-grid label > span { color: #b94d44; }
+.reward-form-grid .reward-field-full { grid-column: 1 / -1; }
+.reward-form-grid textarea { resize: vertical; min-height: 76px; }
+.reward-form-note { margin-bottom: 0; }
+.reward-detail { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; margin-top: 18px; }
+.reward-detail > .reward-image { width: 100px; height: 100px; }
+.reward-detail dl { display: grid; gap: 11px; margin: 0; }
+.reward-detail dl > div { display: grid; gap: 3px; }
+.reward-detail dt { color: #819087; font-size: 10px; }
+.reward-detail dd { margin: 0; color: #31483c; font-size: 11px; line-height: 1.5; }
+.rewards-filters .visually-hidden, .rewards-table .visually-hidden { position: absolute; display: block; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 800px) {
+  .rewards-toolbar { align-items: flex-start; flex-direction: column; }
+  .rewards-filters { width: 100%; }
+  .rewards-surface { padding-top: 17px; }
+  .rewards-pagination { padding-right: 17px; padding-left: 17px; }
+}
+@media (max-width: 480px) {
+  .rewards-header { display: flex; flex-direction: column; align-items: flex-start; }
+  .rewards-header > .btn { min-height: 42px; }
+  .rewards-filters { flex-direction: column; }
+  .rewards-filters select { width: 100%; flex-basis: auto; }
+  .rewards-pagination { align-items: flex-start; flex-direction: column; }
+  .rewards-pagination > div { align-self: flex-end; }
+  .rewards-dialog { padding: 21px 17px; }
+  .reward-form-grid { grid-template-columns: 1fr; }
+  .reward-form-grid .reward-field-full { grid-column: auto; }
+  .reward-detail { grid-template-columns: 1fr; }
+}
 @media (max-width: 800px) {
   .chart-grid { grid-template-columns: minmax(0, 1fr); }
   .toast { right: 16px; bottom: calc(82px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); }
