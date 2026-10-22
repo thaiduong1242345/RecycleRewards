@@ -18,7 +18,7 @@ const confidencePercent = (value) => Math.round((Number(value) <= 1 ? Number(val
 const videoTimestamp = (value) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(value);
 const initials = (name) => name.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toUpperCase();
 function Status({ status }) { return <span className={'pill ' + status}>{status === 'approved' ? '✓' : status === 'rejected' ? '×' : '◷'} {statusText(status)}</span>; }
-function Logo() { return <div className="logo"><b>♻</b><span><strong>Mầm Xanh</strong><small>TRƯỜNG HỌC XANH</small></span></div>; }
+function Logo() { return <div className="logo"><img className="logo-image" src="/images/recycle-rewards-logo.png" alt="RecycleRewards" /><span><strong>RecycleRewards</strong><small>SỐNG XANH CÙNG RECYCLEREWARDS</small></span></div>; }
 function Button({ children, variant = 'primary', className = '', ...props }) { return <button className={'btn ' + variant + ' ' + className} {...props}>{children}</button>; }
 
 function Login({ login, emailLogin, register, notify }) {
@@ -46,7 +46,7 @@ function Login({ login, emailLogin, register, notify }) {
     <form onSubmit={submit}>{mode === 'register' && <><label htmlFor="register-name">Họ và tên</label><input id="register-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required /></>}<label htmlFor="auth-email">Email</label><input id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /><label htmlFor="auth-password">Mật khẩu</label><input id="auth-password" type="password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required /><Button className="wide" disabled={loading}>{loading ? 'Đang xử lý...' : mode === 'login' ? 'Đăng nhập →' : 'Tạo tài khoản →'}</Button></form>
     {mode === 'login' && <button className="text-button auth-reset" type="button" onClick={async () => { if (!email) return notify('Nhập email để nhận liên kết đặt lại mật khẩu.', 'warning'); try { await authService.resetPassword(email); notify('Đã gửi liên kết đặt lại mật khẩu.', 'success'); } catch (error) { notify(error.message, 'error'); } }}>Quên mật khẩu?</button>}
     <p className="hint">Tài khoản email được xác thực bởi Firebase và lưu profile trong hệ thống.</p>
-  </div></section><aside className="login-art"><div><em>MỖI HÀNH ĐỘNG NHỎ, MỘT TƯƠNG LAI XANH</em><h2>Biến điều tốt<br />thành <i>thói quen.</i></h2><p>Mỗi món đồ được tái chế đúng cách đều góp thêm một điểm xanh cho lớp học và hành tinh của chúng ta.</p><b className="giant-leaf">♧</b></div><footer>Một chương trình nhỏ từ THCS Nguyễn Du <span>01 / 04</span></footer></aside></main>;
+  </div></section><aside className="login-art"><div><em>MỖI HÀNH ĐỘNG NHỎ, MỘT TƯƠNG LAI XANH</em><h2>Biến điều tốt<br />thành <i>thói quen.</i></h2><p>Mỗi món đồ được tái chế đúng cách đều góp thêm một điểm xanh cho lớp học và hành tinh của chúng ta.</p><img className="login-art-image" src="/images/login-art.png" alt="Mỗi hành động nhỏ, một tương lai xanh" /></div><footer>Một chương trình nhỏ từ THCS Nguyễn Du <span>01 / 04</span></footer></aside></main>;
 }
 function Nav({ session, route, go, logout }) {
   const links = session.role === 'admin' ? [['/admin/dashboard', '▦', 'Thống kê'], ['/admin/rewards', '◇', 'Quản lý quà'], ['/admin', '☑', 'Duyệt bài'], ['/profile', '♙', 'Hồ sơ']] : [['/student/dashboard', '⌂', 'Tổng quan'], ['/student/scanner', '⌁', 'Quét rác tái chế'], ['/student/rewards', '◇', 'Đổi quà'], ['/student/history', '◷', 'Lịch sử của tôi'], ['/profile', '♙', 'Hồ sơ']];
@@ -337,6 +337,13 @@ export default function App() {
   const [session, setSession] = useState(() => { try { return JSON.parse(localStorage.getItem('rr-session')) || null; } catch { return null; } }); const [route, setRoute] = useState(() => location.hash.slice(1) || '/');
   useEffect(() => { const sync = () => setRoute(location.hash.slice(1) || '/'); addEventListener('hashchange', sync); return () => removeEventListener('hashchange', sync); }, []);
   useEffect(() => { if (session) localStorage.setItem('rr-session', JSON.stringify(session)); else localStorage.removeItem('rr-session'); }, [session]);
+  useEffect(() => {
+    const blockImageContextMenu = (event) => {
+      if (event.target instanceof Element && event.target.closest('img')) event.preventDefault();
+    };
+    document.addEventListener('contextmenu', blockImageContextMenu);
+    return () => document.removeEventListener('contextmenu', blockImageContextMenu);
+  }, []);
   useEffect(() => authService.onAuthStateChanged(async (firebaseUser) => {
     if (!firebaseUser) {
       setSession(null);
