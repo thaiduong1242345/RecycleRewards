@@ -18,6 +18,13 @@ export async function connectDatabase() {
 		const indexes = await transactions.indexes();
 		const legacyIndex = indexes.find((index) => index.name === 'submissionId_1_type_1' && !index.partialFilterExpression);
 		if (legacyIndex) await transactions.dropIndex(legacyIndex.name);
+		// A first deployment may have created `redemptionId_1` as a non-unique
+		// sparse index from the field definition. MongoDB cannot replace it with
+		// a unique index under the same name, so upgrade it explicitly once.
+		const redemptionIndex = indexes.find((index) => index.name === 'redemptionId_1');
+		if (redemptionIndex && (!redemptionIndex.unique || !redemptionIndex.sparse)) {
+			await transactions.dropIndex(redemptionIndex.name);
+		}
 		await transactions.createIndex(
 			{ submissionId: 1, type: 1 },
 			{ unique: true, partialFilterExpression: { submissionId: { $exists: true } }, name: 'submissionId_1_type_1' },

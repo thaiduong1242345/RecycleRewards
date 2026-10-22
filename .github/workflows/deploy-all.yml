@@ -65,6 +65,20 @@ jobs:
             fi
             
             pm2 save
+            # Fail the deployment with actionable diagnostics if Nginx would
+            # otherwise return a vague 502 because Node did not boot.
+            for attempt in $(seq 1 15); do
+              if curl --fail --silent http://127.0.0.1:5000/api/health > /dev/null; then
+                break
+              fi
+              if [ "$attempt" = "15" ]; then
+                echo "Recycle Node backend did not pass /api/health."
+                pm2 status
+                pm2 logs recycle-backend --lines 100 --nostream
+                exit 1
+              fi
+              sleep 2
+            done
 
             # YOLO/FastAPI runs in one warm container. The Nginx /ai/ proxy is
             # configured once from deploy/nginx-ai.conf; this publish is local only.
