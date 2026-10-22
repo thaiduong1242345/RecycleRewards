@@ -73,6 +73,7 @@ function Scanner({ go, notify }) {
   const [stream, setStream] = useState(null);
   const [detections, setDetections] = useState([]);
   const [type, setType] = useState('');
+  const [manualType, setManualType] = useState(false);
   const [confidence, setConfidence] = useState(0);
   const [frames, setFrames] = useState([]);
   const [image, setImage] = useState('');
@@ -148,7 +149,9 @@ function Scanner({ go, notify }) {
       setStatus(best ? `YOLOv8 · ${result.latency_ms} ms` : `Không tìm thấy vật thể · ${result.latency_ms} ms`);
       if (best) {
         setConfidence(best.confidence);
-        setType((current) => current || best.label);
+        // Keep the form aligned with the latest YOLO result unless the user
+        // deliberately selects a different class from the dropdown.
+        if (!manualType) setType(best.label);
       } else {
         setConfidence(0);
       }
@@ -204,6 +207,7 @@ function Scanner({ go, notify }) {
     setFrames([]);
     setImage('');
     setType('');
+    setManualType(false);
     setConfidence(0);
     setStatus('Sẵn sàng quét lại.');
   };
@@ -254,7 +258,7 @@ function Scanner({ go, notify }) {
         <em>YOLOV8 · FASTAPI</em><h2>Vật phẩm của bạn</h2>
         <p>{detections.length ? `${detections.length} vật thể được phát hiện trong frame mới nhất.` : 'Đưa một vật thể vào giữa khung hình.'}</p>
         <label>Loại vật phẩm</label>
-        <select value={type} onChange={(event) => setType(event.target.value)}>
+        <select value={type} onChange={(event) => { setType(event.target.value); setManualType(true); }}>
           <option value="">Chọn loại vật phẩm</option>
           {wasteTypes.map((item) => <option key={item} value={item}>{wasteLabel(item)}</option>)}
         </select>
