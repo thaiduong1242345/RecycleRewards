@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { authService } from './services/auth.service.js';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import AdminRewards from './pages/AdminRewards.jsx';
+import Rewards from './pages/Rewards.jsx';
 import AdminSubmissions from './pages/AdminSubmissions.jsx';
 import Profile from './pages/Profile.jsx';
 import { useToast } from './components/ToastProvider.jsx';
@@ -48,7 +49,7 @@ function Login({ login, emailLogin, register, notify }) {
   </div></section><aside className="login-art"><div><em>MỖI HÀNH ĐỘNG NHỎ, MỘT TƯƠNG LAI XANH</em><h2>Biến điều tốt<br />thành <i>thói quen.</i></h2><p>Mỗi món đồ được tái chế đúng cách đều góp thêm một điểm xanh cho lớp học và hành tinh của chúng ta.</p><b className="giant-leaf">♧</b></div><footer>Một chương trình nhỏ từ THCS Nguyễn Du <span>01 / 04</span></footer></aside></main>;
 }
 function Nav({ session, route, go, logout }) {
-  const links = session.role === 'admin' ? [['/admin/dashboard', '▦', 'Thống kê'], ['/admin/rewards', '◇', 'Quản lý quà'], ['/admin', '☑', 'Duyệt bài'], ['/profile', '♙', 'Hồ sơ']] : [['/student/dashboard', '⌂', 'Tổng quan'], ['/student/scanner', '⌁', 'Quét rác tái chế'], ['/student/history', '◷', 'Lịch sử của tôi'], ['/profile', '♙', 'Hồ sơ']];
+  const links = session.role === 'admin' ? [['/admin/dashboard', '▦', 'Thống kê'], ['/admin/rewards', '◇', 'Quản lý quà'], ['/admin', '☑', 'Duyệt bài'], ['/profile', '♙', 'Hồ sơ']] : [['/student/dashboard', '⌂', 'Tổng quan'], ['/student/scanner', '⌁', 'Quét rác tái chế'], ['/student/rewards', '◇', 'Đổi quà'], ['/student/history', '◷', 'Lịch sử của tôi'], ['/profile', '♙', 'Hồ sơ']];
   return <><aside className="sidebar"><Logo /><p className="menu-title">MENU CHÍNH</p><nav>{links.map(([path, icon, label]) => <button key={path} className={route === path ? 'nav-active' : ''} onClick={() => go(path)}><b>{icon}</b>{label}</button>)}</nav><div className="green-tip"><b>♧ Góc xanh mỗi ngày</b><small>Tái chế đúng, vui hơn!</small></div><div className="profile"><b>{initials(session.name)}</b><span><strong>{session.name}</strong><small>{session.role === 'admin' ? 'Quản trị viên' : 'Học sinh'}</small></span><button className="logout-button" type="button" onClick={logout}><b>⇥</b><span>Đăng xuất</span></button></div></aside><nav className="mobile-nav" aria-label="Điều hướng chính">{links.map(([path, icon, label]) => <button key={path} aria-label={label} className={route === path ? 'nav-active' : ''} onClick={() => go(path)}><b>{icon}</b><small>{label}</small></button>)}<button className="logout-button" type="button" aria-label="Đăng xuất" onClick={logout}><b>⇥</b><small>Đăng xuất</small></button></nav></>;
 }
 function Header({ eyebrow, title, subtitle, children }) { return <header className="page-header"><div><em>{eyebrow}</em><h1>{title}</h1><p>{subtitle}</p></div>{children}</header>; }
@@ -73,11 +74,11 @@ function Scanner({ go, notify }) {
   const [stream, setStream] = useState(null);
   const [detections, setDetections] = useState([]);
   const [type, setType] = useState('');
+  const [detectedLabel, setDetectedLabel] = useState('');
   const [confidence, setConfidence] = useState(0);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState('');
   const [videoDuration, setVideoDuration] = useState(0);
-  const [recording, setRecording] = useState(false);
   const [status, setStatus] = useState('Camera chưa được bật.');
   const [cameraError, setCameraError] = useState('');
   const [sending, setSending] = useState(false);
@@ -87,7 +88,6 @@ function Scanner({ go, notify }) {
   const capture = useRef(null);
   const streamRef = useRef(null);
   const intervalRef = useRef(null);
-  const frameIntervalRef = useRef(null);
   const requestRef = useRef(null);
   const inFlight = useRef(false);
   const detectionsRef = useRef([]);
@@ -161,11 +161,14 @@ function Scanner({ go, notify }) {
       setStatus(best ? `YOLOv8 · ${result.latency_ms} ms` : `Không tìm thấy vật thể · ${result.latency_ms} ms`);
       if (best) {
         setConfidence(best.confidence);
+        setDetectedLabel(best.label);
         // Keep the form aligned with the latest YOLO result unless the user
         // deliberately selects a different class from the dropdown.
         if (!manualTypeRef.current) setType(best.label);
       } else {
         setConfidence(0);
+        setDetectedLabel('');
+        if (!manualTypeRef.current) setType('');
       }
       setCameraError('');
     } catch (error) {
@@ -192,6 +195,8 @@ function Scanner({ go, notify }) {
       setRecordedBlob(null);
       setVideoPreviewUrl('');
       setVideoDuration(0);
+      setDetectedLabel('');
+      setType('');
       manualTypeRef.current = false;
       camera = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -229,11 +234,9 @@ function Scanner({ go, notify }) {
           setVideoPreviewUrl(objectUrl);
           setVideoDuration(duration);
         }
-        setRecording(false);
         recorderRef.current = null;
       };
       recorder.start(1000);
-      setRecording(true);
       intervalRef.current = window.setInterval(detectFrame, 100);
       // Cap evidence recordings at 30 seconds to keep upload size predictable.
       recordTimerRef.current = window.setTimeout(stopCamera, 30000);
@@ -253,6 +256,7 @@ function Scanner({ go, notify }) {
   const resetScan = () => {
     setDetections([]);
     setType('');
+    setDetectedLabel('');
     manualTypeRef.current = false;
     setConfidence(0);
     setStatus('Sẵn sàng quét lại.');
@@ -285,13 +289,13 @@ function Scanner({ go, notify }) {
   return <><Header eyebrow="NHẬN DIỆN YOLOV8" title="Quét vật phẩm tái chế" subtitle="Camera gửi một frame mỗi 100 ms đến FastAPI và vẽ bounding box trực tiếp." />
     <section className="scanner-grid">
       <div className="surface upload-surface">
-        <div className="drop-zone yolo-drop-zone">
+        <div className="drop-zone yolo-drop-zone" data-ai-mode="yolov8-video-evidence">
           <div className="camera-stage" style={{ aspectRatio: previewRatio }}>
             <video ref={video} src={!stream ? videoPreviewUrl : undefined} className={stream || videoPreviewUrl ? 'camera-preview' : 'camera-preview camera-hidden'} autoPlay={Boolean(stream)} muted={Boolean(stream)} controls={!stream && Boolean(videoPreviewUrl)} playsInline />
             <canvas ref={overlay} className={stream ? 'detection-overlay' : 'detection-overlay camera-hidden'} aria-label="Khung nhận diện YOLOv8" />
+            {!stream && videoPreviewUrl && detectedLabel && <div className="video-recognition-label">Hệ thống đã nhận diện: <b>{wasteLabel(detectedLabel)}</b></div>}
             {!stream && !videoPreviewUrl && <div className="camera-placeholder"><b>⌁</b><strong>Camera sẵn sàng</strong><span>Bật camera để bắt đầu nhận diện rác.</span></div>}
           </div>
-          <div className="prediction-badge"><strong>{status}</strong><span>{recording ? '● REC' : confidence ? Math.round(confidence * 100) + '%' : videoPreviewUrl ? 'Sẵn sàng gửi' : '—'}</span></div>
           {cameraError && <div className="error-state">{cameraError}</div>}
           {!stream
             ? <Button type="button" variant="outline" onClick={startCamera}>{videoPreviewUrl ? '↻ Quay lại' : '⇥ Bật camera'}</Button>
@@ -309,7 +313,7 @@ function Scanner({ go, notify }) {
         </select>
         <div className="result-stats"><span>Độ tin cậy<b>{confidence ? Math.round(confidence * 100) + '%' : '—'}</b></span><span>Video<b>{videoDuration ? `${videoDuration}s` : '—'}</b></span></div>
         <Button className="wide" disabled={!recordedBlob || !type || sending} onClick={send}>{sending ? 'Đang upload video...' : 'Gửi video đã quét →'}</Button>
-        <small className="secure">Chỉ bài đạt confidence từ 0.5 mới được chuyển vào trạng thái pending.</small>
+        <small className="secure">{status}. Video WebM được xem trước tại đây trước khi upload. Chỉ bài đạt confidence từ 0.5 mới được chuyển vào trạng thái pending.</small>
       </aside>
     </section></>;
 }
@@ -376,6 +380,8 @@ export default function App() {
   } else {
     page = route === '/student/scanner'
       ? <Scanner session={session} go={go} notify={notify} />
+      : route === '/student/rewards'
+        ? <Rewards session={session} setSession={setSession} />
       : route === '/student/history'
         ? <History session={session} />
         : <Dashboard session={session} go={go} />;

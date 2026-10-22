@@ -1,5 +1,5 @@
 import { request } from './api.js';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth';
 import { auth } from '../config/firebase.js';
 
 export const authService = {
@@ -19,7 +19,7 @@ export const authService = {
     if (name.trim()) await updateProfile(result.user, { displayName: name.trim() });
     return syncUser(result.user);
   },
-  resetPassword: (email) => sendPasswordResetEmail(auth, email),
+  resetPassword: (email) => request('/auth/password-reset', { method: 'POST', body: { email } }),
   syncUser,
   onAuthStateChanged: (callback) => onAuthStateChanged(auth, callback),
   logout: () => signOut(auth),

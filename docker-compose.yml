@@ -10,6 +10,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://recycle-rewards-2026.web.app,http://localhost:5173}
       YOLO_CONFIDENCE: ${YOLO_CONFIDENCE:-0.45}
       YOLO_IMAGE_SIZE: ${YOLO_IMAGE_SIZE:-320}
+      MAX_BOX_AREA_RATIO: ${MAX_BOX_AREA_RATIO:-0.85}
       MAX_IMAGE_BYTES: ${MAX_IMAGE_BYTES:-4194304}
     # Do not expose inference directly to the Internet. Nginx proxies /ai/.
     ports:

@@ -208,6 +208,19 @@ label { display: block; font-size: 12px; font-weight: 700; margin: 17px 0 7px; c
 .camera-placeholder > b { font-size: 38px; }
 .camera-placeholder span { color: #a5cbbb; font-size: 12px; }
 .capture-canvas { display: none; }
+.video-recognition-label { position: absolute; right: 12px; bottom: 12px; z-index: 2; padding: 8px 10px; border-radius: 8px; color: #effff6; background: #092c20dc; font-size: 12px; }
+.video-recognition-label b { color: #73e4aa; }
+.points-balance { align-self: center; padding: 12px 16px; border-radius: 12px; color: #087a55; background: #e4f6ec; font-size: 22px; font-weight: 800; }
+.points-balance small { font-size: 11px; }
+.reward-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.reward-card { display: grid; gap: 10px; padding: 15px; }
+.reward-card-image { height: 120px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: #e8f4ed; color: #07885d; font-size: 36px; }
+.reward-card-image img { width: 100%; height: 100%; object-fit: cover; }
+.reward-card h2 { margin: 0; font-size: 15px; }
+.reward-card p { min-height: 34px; margin: 0; color: #718178; font-size: 11px; line-height: 1.5; }
+.reward-card > div:not(.reward-card-image) { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.reward-card strong { color: #087a55; font-size: 14px; }
+.reward-card small { color: #718178; font-size: 10px; }
 .prediction-badge { position: absolute; top: 14px; left: 14px; right: 14px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; color: white; background: #102d25d9; border: 1px solid #ffffff40; border-radius: 9px; font-size: 11px; }
 .prediction-badge strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prediction-badge span { flex: 0 0 auto; color: #a6edc9; font-weight: 800; }

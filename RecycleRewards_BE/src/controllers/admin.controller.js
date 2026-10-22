@@ -1,19 +1,7 @@
-import mongoose from 'mongoose';
 import { Submission } from '../models/submission.model.js';
 import { Transaction } from '../models/transaction.model.js';
 import { User } from '../models/user.model.js';
-
-async function runDatabaseWork(work) {
-  const topologyType = mongoose.connection.getClient().topology?.description?.type;
-  if (topologyType === 'Single') return work(null);
-
-  const session = await mongoose.startSession();
-  try {
-    return await session.withTransaction(() => work(session));
-  } finally {
-    await session.endSession();
-  }
-}
+import { runDatabaseWork } from '../services/database-transaction.service.js';
 
 export async function getStatistics(_req, res) {
   const [totalUsers, [summary = {}]] = await Promise.all([

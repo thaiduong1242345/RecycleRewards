@@ -49,3 +49,7 @@ export function updateFirebaseUser(uid, data) {
 export function deleteFirebaseUser(uid) {
 	return firebaseAuth.deleteUser(uid);
 }
+
+export function generatePasswordResetLink(email) {
+	return firebaseAuth.generatePasswordResetLink(email);
+}

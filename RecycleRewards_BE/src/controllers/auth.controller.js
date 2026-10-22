@@ -1,4 +1,4 @@
-import { verifyIdToken } from '../config/firebase.js';
+import { generatePasswordResetLink, verifyIdToken } from '../config/firebase.js';
 import { findOrCreateGoogleUser } from '../models/user.model.js';
 
 export async function login(req, res) {
@@ -43,4 +43,17 @@ export async function firebaseSession(req, res) {
     console.error(`Authenticated user persistence failed [${error.code || 'unknown'}]:`, error.message);
     return res.status(500).json({ message: 'Token hợp lệ nhưng không thể lưu tài khoản vào MongoDB.' });
   }
+}
+
+// Do not disclose whether an email exists. The generated link is deliberately
+// not returned; Firebase delivers it to the account owner's email address.
+export async function passwordReset(req, res) {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ message: 'Email không hợp lệ.' });
+  try {
+    await generatePasswordResetLink(email);
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') console.error('Password reset link error:', error.message);
+  }
+  res.status(202).json({ message: 'Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.' });
 }

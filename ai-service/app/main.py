@@ -23,6 +23,11 @@ EXPECTED_LABELS = {"cardboard", "glass", "metal", "paper", "plastic", "trash"}
 MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(4 * 1024 * 1024)))
 CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.45"))
 IMAGE_SIZE = int(os.getenv("YOLO_IMAGE_SIZE", "320"))
+# A model that labels the entire camera frame is normally a false positive
+# (for example, a dark/covered lens classified as plastic). Keep this tunable
+# because a close-up object can legitimately occupy a large part of a frame.
+MAX_BOX_AREA_RATIO = float(os.getenv("MAX_BOX_AREA_RATIO", "0.85"))
+FULL_FRAME_EDGE_RATIO = float(os.getenv("FULL_FRAME_EDGE_RATIO", "0.97"))
 
 
 def configured_origins() -> list[str]:
@@ -145,6 +150,7 @@ async def detect(request: Request, file: UploadFile = File(...)) -> dict[str, An
         request.app.state.inference_lock.release()
 
     boxes: list[dict[str, Any]] = []
+    ignored_full_frame_boxes = 0
     first = result[0]
     if first.boxes is not None:
         for xyxy, confidence, class_id in zip(
@@ -152,12 +158,24 @@ async def detect(request: Request, file: UploadFile = File(...)) -> dict[str, An
             first.boxes.conf.cpu().tolist(),
             first.boxes.cls.cpu().tolist(),
         ):
+            x1, y1, x2, y2 = (float(value) for value in xyxy)
+            x1, x2 = sorted((max(0.0, min(x1, image.shape[1])), max(0.0, min(x2, image.shape[1]))))
+            y1, y2 = sorted((max(0.0, min(y1, image.shape[0])), max(0.0, min(y2, image.shape[0]))))
+            width_ratio = (x2 - x1) / image.shape[1]
+            height_ratio = (y2 - y1) / image.shape[0]
+            if width_ratio <= 0 or height_ratio <= 0:
+                continue
+            if width_ratio * height_ratio >= MAX_BOX_AREA_RATIO or (
+                width_ratio >= FULL_FRAME_EDGE_RATIO and height_ratio >= FULL_FRAME_EDGE_RATIO
+            ):
+                ignored_full_frame_boxes += 1
+                continue
             label = request.app.state.names.get(int(class_id), str(int(class_id)))
             boxes.append(
                 {
                     "label": label,
                     "confidence": round(float(confidence), 4),
-                    "box": [round(float(value), 1) for value in xyxy],
+                    "box": [round(value, 1) for value in (x1, y1, x2, y2)],
                 }
             )
 
@@ -165,5 +183,6 @@ async def detect(request: Request, file: UploadFile = File(...)) -> dict[str, An
     return {
         "detections": boxes,
         "image": {"width": int(image.shape[1]), "height": int(image.shape[0])},
+        "ignored_full_frame_boxes": ignored_full_frame_boxes,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
     }

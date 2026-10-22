@@ -108,6 +108,7 @@ jobs:
         env:
           VITE_API_URL: https://recycle-rewards.duckdns.org/api
           VITE_AI_API_URL: https://recycle-rewards.duckdns.org/ai
+          VITE_BUILD_SHA: ${{ github.sha }}
         run: |
           npm install
           npm run build

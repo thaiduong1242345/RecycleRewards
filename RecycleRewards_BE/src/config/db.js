@@ -9,6 +9,21 @@ export async function connectDatabase() {
 		throw new Error(`Không thể kết nối MongoDB: ${error.message}`);
 	}
 	console.log('MongoDB connected..');
+	// Existing deployments created a non-partial unique `{submissionId,type}`
+	// index. Migrate it once so many reward-redemption records with no
+	// submissionId can coexist. A fresh database lets Mongoose create indexes.
+	const hasTransactions = await mongoose.connection.db.listCollections({ name: 'transactions' }).hasNext();
+	if (hasTransactions) {
+		const transactions = mongoose.connection.collection('transactions');
+		const indexes = await transactions.indexes();
+		const legacyIndex = indexes.find((index) => index.name === 'submissionId_1_type_1' && !index.partialFilterExpression);
+		if (legacyIndex) await transactions.dropIndex(legacyIndex.name);
+		await transactions.createIndex(
+			{ submissionId: 1, type: 1 },
+			{ unique: true, partialFilterExpression: { submissionId: { $exists: true } }, name: 'submissionId_1_type_1' },
+		);
+		await transactions.createIndex({ redemptionId: 1 }, { unique: true, sparse: true, name: 'redemptionId_1' });
+	}
 }
 
 export function databaseState() {

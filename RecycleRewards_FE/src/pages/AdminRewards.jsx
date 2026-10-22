@@ -9,7 +9,7 @@ const pageSize = 5;
 
 function PageHeader({ onCreate }) {
   return <header className="page-header rewards-header">
-    <div><em>KHU VỰC QUẢN TRỊ</em><h1>Quản lý quà</h1><p>Quản lý quà và điểm đổi. Dữ liệu demo được lưu trên trình duyệt này.</p></div>
+    <div><em>KHU VỰC QUẢN TRỊ</em><h1>Quản lý quà</h1><p>Quản lý quà, tồn kho và điểm đổi được lưu trên hệ thống.</p></div>
     <button className="btn primary" type="button" onClick={onCreate}>＋ Thêm quà mới</button>
   </header>;
 }
@@ -77,7 +77,7 @@ function RewardDialog({ mode, reward, onClose, onSave, onDelete, saving }) {
           <label>Trạng thái<select name="status" value={form.status} onChange={updateField}><option value="active">Đang mở</option><option value="inactive">Tạm ẩn</option></select></label>
           <label>Đường dẫn ảnh<input name="imageUrl" type="url" value={form.imageUrl} onChange={updateField} placeholder="https://..." /></label>
         </div>
-        <p className="reward-form-note">Thông tin hiện chỉ được lưu trong trình duyệt này.</p>
+        <p className="reward-form-note">Thông tin sẽ được lưu trên hệ thống và hiển thị cho học sinh.</p>
         <div className="modal-actions"><button className="btn outline" type="button" onClick={onClose} disabled={saving}>Hủy</button><button className="btn primary" type="submit" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu quà'}</button></div>
       </form>}
     </section>
