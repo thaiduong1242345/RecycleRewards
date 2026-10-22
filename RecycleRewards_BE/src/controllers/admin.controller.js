@@ -88,7 +88,14 @@ export async function revokeSubmission(req, res) {
       { upsert: true, returnDocument: 'after', includeResultMetadata: true, ...(session ? { session } : {}) },
     );
     if (reversalResult.lastErrorObject?.upserted) {
-      await User.findByIdAndUpdate(item.userId, { $inc: { pointsBalance: -points } }, session ? { session } : undefined);
+      const balanceUpdate = await User.updateOne(
+        { _id: item.userId, pointsBalance: { $gte: points } },
+        { $inc: { pointsBalance: -points } },
+        session ? { session } : undefined,
+      );
+      if (balanceUpdate.modifiedCount === 0) {
+        await User.findByIdAndUpdate(item.userId, { $set: { pointsBalance: 0 } }, session ? { session } : undefined);
+      }
     }
     item.status = 'rejected';
     item.points = 0;

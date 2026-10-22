@@ -80,7 +80,7 @@ export function checkAi(req, res) {
       accepted: false,
       confidence,
       threshold: AI_CONFIDENCE_THRESHOLD,
-      message: 'Kết quả AI không đạt độ chính xác tối thiểu 80%.',
+      message: 'Kết quả AI không đạt độ chính xác tối thiểu 50%.',
     });
   }
 

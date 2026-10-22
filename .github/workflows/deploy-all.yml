@@ -65,6 +65,16 @@ jobs:
             fi
             
             pm2 save
+
+            # YOLO/FastAPI runs in one warm container. The Nginx /ai/ proxy is
+            # configured once from deploy/nginx-ai.conf; this publish is local only.
+            if ! command -v docker > /dev/null 2>&1; then
+              echo "Docker Engine is required for recycle-ai. Install it on EC2 before deploying."
+              exit 1
+            fi
+            cd "$REPO_DIR"
+            chmod +x deploy/deploy-ai.sh
+            ./deploy/deploy-ai.sh "$REPO_DIR"
           EOF
 
   # Job 2: Tự động build và deploy Frontend lên Firebase Hosting
@@ -84,6 +94,7 @@ jobs:
         working-directory: ./RecycleRewards_FE
         env:
           VITE_API_URL: https://recycle-rewards.duckdns.org/api
+          VITE_AI_API_URL: https://recycle-rewards.duckdns.org/ai
         run: |
           npm install
           npm run build

@@ -1,0 +1,8 @@
+.git
+.github
+**/node_modules
+RecycleRewards_FE/dist
+**/__pycache__
+RecycleRewards_BE/uploads
+RecycleRewards_BE/firebase-service-account.json
+*.pem

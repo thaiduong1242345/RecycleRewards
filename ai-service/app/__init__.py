@@ -1,0 +1,1 @@
+"""RecycleRewards YOLO inference service."""
