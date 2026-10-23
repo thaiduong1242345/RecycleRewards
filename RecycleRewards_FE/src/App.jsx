@@ -7,10 +7,18 @@ import AdminSubmissions from './pages/AdminSubmissions.jsx';
 import Profile from './pages/Profile.jsx';
 import { useToast } from './components/ToastProvider.jsx';
 import GoogleLoginButton from './components/common/GoogleLoginButton.jsx';
-import { detectWasteFrame } from './services/ai.service.js';
+import * as tf from '@tensorflow/tfjs';
 
 const wasteTypes = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash'];
 const wasteLabels = { cardboard: 'Bìa carton', glass: 'Thủy tinh', metal: 'Kim loại', paper: 'Giấy', plastic: 'Nhựa', trash: 'Rác khác' };
+const tensorFlowLabelMap = {
+  'Bìa các tông': 'cardboard',
+  'thủy tinh': 'glass',
+  'vỏ nhôm': 'metal',
+  'giấy': 'paper',
+  'chai nhựa': 'plastic',
+  'rác không phân loại': 'trash',
+};
 const wasteLabel = (label) => wasteLabels[label] || label;
 const date = (value) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 const statusText = (status) => status === 'approved' ? 'Đã duyệt' : status === 'rejected' ? 'Từ chối' : 'Chờ duyệt';
@@ -88,9 +96,10 @@ function Scanner({ go, notify }) {
   const capture = useRef(null);
   const streamRef = useRef(null);
   const intervalRef = useRef(null);
-  const requestRef = useRef(null);
   const inFlight = useRef(false);
-  const detectionsRef = useRef([]);
+  const classifierRef = useRef(null);
+  const modelLabelsRef = useRef([]);
+  const modelLoadRef = useRef(null);
   const manualTypeRef = useRef(false);
   const recorderRef = useRef(null);
   const recordTimerRef = useRef(null);
@@ -101,7 +110,6 @@ function Scanner({ go, notify }) {
   const stopCamera = () => {
     clearInterval(intervalRef.current);
     clearTimeout(recordTimerRef.current);
-    requestRef.current?.abort();
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -123,25 +131,66 @@ function Scanner({ go, notify }) {
     canvas.height = source.height;
     const context = canvas.getContext('2d');
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.lineWidth = Math.max(3, canvas.width / 220);
-    context.font = `bold ${Math.max(16, canvas.width / 30)}px sans-serif`;
+    // Use source-image pixels: CSS scales this canvas with the video, so the
+    // label and bounding box remain in the correct position on all screens.
+    const strokeWidth = Math.max(5, canvas.width / 125);
+    const fontSize = Math.max(22, canvas.width / 22);
+    const labelPaddingX = Math.max(10, fontSize * 0.42);
+    const labelHeight = Math.ceil(fontSize * 1.5);
+    context.lineWidth = strokeWidth;
+    context.font = `800 ${fontSize}px "Be Vietnam Pro", Arial, sans-serif`;
+    context.lineJoin = 'round';
     detections.forEach((item) => {
       const [x1, y1, x2, y2] = item.box;
       const name = `${wasteLabel(item.label)} ${(item.confidence * 100).toFixed(0)}%`;
+      const left = Math.max(0, Math.min(canvas.width - 1, x1));
+      const top = Math.max(0, Math.min(canvas.height - 1, y1));
+      const right = Math.max(left + 1, Math.min(canvas.width, x2));
+      const bottom = Math.max(top + 1, Math.min(canvas.height, y2));
       const textWidth = context.measureText(name).width;
-      const textHeight = Math.max(24, canvas.width / 23);
-      const labelY = Math.max(textHeight, y1);
-      context.strokeStyle = '#32d583';
-      context.fillStyle = '#32d583';
-      context.strokeRect(x1, y1, x2 - x1, y2 - y1);
-      context.fillRect(x1, labelY - textHeight, textWidth + 14, textHeight);
-      context.fillStyle = '#092c20';
-      context.fillText(name, x1 + 7, labelY - 7);
+      const labelWidth = Math.min(canvas.width - left, textWidth + labelPaddingX * 2);
+      const labelTop = Math.max(0, top - labelHeight);
+
+      // A dark outer stroke keeps the bright bounding box visible on light
+      // backgrounds; the green inner stroke makes the detected region clear.
+      context.strokeStyle = '#06291d';
+      context.lineWidth = strokeWidth + 3;
+      context.strokeRect(left, top, right - left, bottom - top);
+      context.strokeStyle = '#39e68c';
+      context.lineWidth = strokeWidth;
+      context.strokeRect(left, top, right - left, bottom - top);
+
+      context.fillStyle = '#06291dec';
+      context.fillRect(left, labelTop, labelWidth, labelHeight);
+      context.fillStyle = '#39e68c';
+      context.fillText(name, left + labelPaddingX, labelTop + fontSize + Math.max(3, fontSize * 0.08));
     });
   }, [detections]);
 
+  const loadClassifier = async () => {
+    if (classifierRef.current) return classifierRef.current;
+    if (!modelLoadRef.current) {
+      modelLoadRef.current = Promise.all([
+        tf.ready(),
+        fetch('/tm-my-image-model/metadata.json').then((response) => {
+          if (!response.ok) throw new Error('Không tìm thấy metadata của model TensorFlow.js.');
+          return response.json();
+        }),
+        tf.loadLayersModel('/tm-my-image-model/model.json'),
+      ]).then(([, metadata, model]) => {
+        modelLabelsRef.current = metadata.labels || [];
+        classifierRef.current = model;
+        return model;
+      }).catch((error) => {
+        modelLoadRef.current = null;
+        throw error;
+      });
+    }
+    return modelLoadRef.current;
+  };
+
   const detectFrame = async () => {
-    if (inFlight.current || !video.current?.videoWidth || !capture.current) return;
+    if (inFlight.current || !video.current?.videoWidth || !capture.current || !classifierRef.current) return;
     const source = video.current;
     const target = capture.current;
     const scale = Math.min(1, 640 / source.videoWidth);
@@ -149,33 +198,45 @@ function Scanner({ go, notify }) {
     target.height = Math.round(source.videoHeight * scale);
     target.getContext('2d', { alpha: false }).drawImage(source, 0, 0, target.width, target.height);
     inFlight.current = true;
-    requestRef.current = new AbortController();
     try {
-      const blob = await new Promise((resolve) => target.toBlob(resolve, 'image/jpeg', 0.8));
-      if (!blob) throw new Error('Không thể tạo ảnh từ camera.');
-      const result = await detectWasteFrame(blob, requestRef.current.signal);
-      const best = result.detections?.[0];
-      const nextDetections = result.detections || [];
-      detectionsRef.current = nextDetections;
-      setDetections(nextDetections);
-      setStatus(best ? `YOLOv8 · ${result.latency_ms} ms` : `Không tìm thấy vật thể · ${result.latency_ms} ms`);
-      if (best) {
-        setConfidence(best.confidence);
-        setDetectedLabel(best.label);
-        // Keep the form aligned with the latest YOLO result unless the user
+      const startedAt = performance.now();
+      const input = tf.tidy(() => tf.image
+        .resizeBilinear(tf.browser.fromPixels(source, 3).toFloat(), [224, 224])
+        .div(127.5)
+        .sub(1)
+        .expandDims(0));
+      const output = classifierRef.current.predict(input);
+      const scores = await output.data();
+      input.dispose();
+      output.dispose();
+      const bestIndex = scores.reduce((best, score, index) => score > scores[best] ? index : best, 0);
+      const bestConfidence = scores[bestIndex] || 0;
+      const rawLabel = modelLabelsRef.current[bestIndex] || '';
+      const bestLabel = tensorFlowLabelMap[rawLabel];
+      const latency = Math.round(performance.now() - startedAt);
+
+      if (bestLabel && bestConfidence >= 0.5) {
+        // This is a classifier, not an object detector. The frame guide is
+        // deliberately drawn around the central capture area, not presented
+        // as a detected-object coordinate returned by the model.
+        setDetections([{ label: bestLabel, confidence: bestConfidence, box: [target.width * 0.12, target.height * 0.12, target.width * 0.88, target.height * 0.88] }]);
+        setStatus(`TensorFlow.js · ${latency} ms`);
+        setConfidence(bestConfidence);
+        setDetectedLabel(bestLabel);
+        // Keep the form aligned with the latest TensorFlow.js result unless the user
         // deliberately selects a different class from the dropdown.
-        if (!manualTypeRef.current) setType(best.label);
+        if (!manualTypeRef.current) setType(bestLabel);
       } else {
+        setDetections([]);
         setConfidence(0);
         setDetectedLabel('');
         if (!manualTypeRef.current) setType('');
+        setStatus(`Chưa đủ độ tin cậy · TensorFlow.js ${latency} ms`);
       }
       setCameraError('');
     } catch (error) {
-      if (error.name !== 'AbortError') {
-        setCameraError(error.message || 'Không thể nhận diện frame.');
-        setStatus('Đang chờ kết nối lại dịch vụ AI...');
-      }
+      setCameraError(error.message || 'Không thể nhận diện frame.');
+      setStatus('Model TensorFlow.js gặp lỗi.');
     } finally {
       inFlight.current = false;
     }
@@ -209,6 +270,8 @@ function Scanner({ go, notify }) {
       await video.current.play();
       const ratio = video.current.videoWidth / video.current.videoHeight;
       setPreviewRatio(`${ratio} / 1`);
+      setStatus('Đang tải model TensorFlow.js trên thiết bị...');
+      await loadClassifier();
 
       // Record one compact WebM evidence video while detection continues on
       // canvas. This replaces the former 30-image Base64 JSON upload, which
@@ -237,10 +300,10 @@ function Scanner({ go, notify }) {
         recorderRef.current = null;
       };
       recorder.start(1000);
-      intervalRef.current = window.setInterval(detectFrame, 100);
+      intervalRef.current = window.setInterval(detectFrame, 250);
       // Cap evidence recordings at 30 seconds to keep upload size predictable.
       recordTimerRef.current = window.setTimeout(stopCamera, 30000);
-      setStatus('Đang nhận diện thời gian thực...');
+      setStatus('Đang nhận diện trên thiết bị...');
     } catch (error) {
       camera?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -286,13 +349,13 @@ function Scanner({ go, notify }) {
     }
   }
 
-  return <><Header eyebrow="NHẬN DIỆN YOLOV8" title="Quét vật phẩm tái chế" subtitle="Camera gửi một frame mỗi 100 ms đến FastAPI và vẽ bounding box trực tiếp." />
+  return <><Header eyebrow="NHẬN DIỆN TENSORFLOW.JS" title="Quét vật phẩm tái chế" subtitle="Model Teachable Machine chạy trực tiếp trên trình duyệt; không gửi frame camera tới dịch vụ AI." />
     <section className="scanner-grid">
       <div className="surface upload-surface">
-        <div className="drop-zone yolo-drop-zone" data-ai-mode="yolov8-video-evidence">
+        <div className="drop-zone yolo-drop-zone" data-ai-mode="tensorflowjs-client-classifier">
           <div className="camera-stage" style={{ aspectRatio: previewRatio }}>
             <video ref={video} src={!stream ? videoPreviewUrl : undefined} className={stream || videoPreviewUrl ? 'camera-preview' : 'camera-preview camera-hidden'} autoPlay={Boolean(stream)} muted={Boolean(stream)} controls={!stream && Boolean(videoPreviewUrl)} playsInline />
-            <canvas ref={overlay} className={stream ? 'detection-overlay' : 'detection-overlay camera-hidden'} aria-label="Khung nhận diện YOLOv8" />
+            <canvas ref={overlay} className={stream ? 'detection-overlay' : 'detection-overlay camera-hidden'} aria-label="Khung phân loại TensorFlow.js" />
             {!stream && videoPreviewUrl && detectedLabel && <div className="video-recognition-label">Hệ thống đã nhận diện: <b>{wasteLabel(detectedLabel)}</b></div>}
             {!stream && !videoPreviewUrl && <div className="camera-placeholder"><b>⌁</b><strong>Camera sẵn sàng</strong><span>Bật camera để bắt đầu nhận diện rác.</span></div>}
           </div>
@@ -304,8 +367,8 @@ function Scanner({ go, notify }) {
         <canvas ref={capture} className="capture-canvas" />
       </div>
       <aside className="surface scan-result">
-        <em>YOLOV8 · FASTAPI</em><h2>Vật phẩm của bạn</h2>
-        <p>{detections.length ? `${detections.length} vật thể được phát hiện trong frame mới nhất.` : 'Đưa một vật thể vào giữa khung hình.'}</p>
+        <em>TENSORFLOW.JS · CLIENT</em><h2>Vật phẩm của bạn</h2>
+        <p>{detections.length ? 'Model đã phân loại vùng giữa khung hình.' : 'Đưa một vật thể vào giữa khung hình.'}</p>
         <label>Loại vật phẩm</label>
         <select value={type} onChange={(event) => { setType(event.target.value); manualTypeRef.current = true; }}>
           <option value="">Chọn loại vật phẩm</option>
