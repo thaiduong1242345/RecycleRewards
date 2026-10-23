@@ -64,7 +64,16 @@ function Header({ eyebrow, title, subtitle, children }) { return <header classNa
 function Metric({ icon, value, label }) { return <article className="metric"><b>{icon}</b><strong>{value}</strong><span>{label}</span></article>; }
 function Empty({ title, text }) { return <div className="empty"><b>♻</b><strong>{title}</strong><span>{text}</span></div>; }
 function ErrorState({ error }) { return <div className="error-state">⚠ {error}</div>; }
-function Row({ item }) { return <article className="activity"><b className="waste-icon">♻</b><span><strong>{item.wasteType}</strong> <Status status={item.status} /><small>{date(item.submittedAt)}{item.feedback ? ' · ' + item.feedback : ''}</small></span><b className={item.status === 'approved' ? 'points' : 'muted'}>{item.status === 'approved' ? '+' + item.points : '—'} <small>điểm</small></b></article>; }
+function Row({ item }) {
+  const hasVideo = Boolean(item.videoUrl);
+  return <article className={'activity' + (hasVideo ? ' activity-with-video' : '')}>
+    {hasVideo
+      ? <video className="activity-video" controls preload="metadata" src={item.videoUrl}>Trình duyệt không hỗ trợ phát video.</video>
+      : <b className="waste-icon">♻</b>}
+    <span><strong>{wasteLabel(item.wasteType)}</strong> <Status status={item.status} /><small>{hasVideo ? '🎥 Video đã gửi · ' : ''}{date(item.submittedAt)}{item.feedback ? ' · ' + item.feedback : ''}</small></span>
+    <b className={item.status === 'approved' ? 'points' : 'muted'}>{item.status === 'approved' ? '+' + item.points : '—'} <small>điểm</small></b>
+  </article>;
+}
 
 function Dashboard({ session, go }) {
   const [data, setData] = useState(null); const [error, setError] = useState('');
