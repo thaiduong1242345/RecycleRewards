@@ -352,7 +352,7 @@ function Scanner({ go, notify }) {
   return <><Header eyebrow="NHẬN DIỆN TENSORFLOW.JS" title="Quét vật phẩm tái chế" subtitle="Model Teachable Machine chạy trực tiếp trên trình duyệt; không gửi frame camera tới dịch vụ AI." />
     <section className="scanner-grid">
       <div className="surface upload-surface">
-        <div className="drop-zone yolo-drop-zone" data-ai-mode="tensorflowjs-client-classifier">
+        <div className="drop-zone tensorflow-drop-zone" data-ai-mode="tensorflowjs-client-classifier">
           <div className="camera-stage" style={{ aspectRatio: previewRatio }}>
             <video ref={video} src={!stream ? videoPreviewUrl : undefined} className={stream || videoPreviewUrl ? 'camera-preview' : 'camera-preview camera-hidden'} autoPlay={Boolean(stream)} muted={Boolean(stream)} controls={!stream && Boolean(videoPreviewUrl)} playsInline />
             <canvas ref={overlay} className={stream ? 'detection-overlay' : 'detection-overlay camera-hidden'} aria-label="Khung phân loại TensorFlow.js" />

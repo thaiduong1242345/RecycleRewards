@@ -80,28 +80,16 @@ jobs:
               sleep 2
             done
 
-            # YOLO/FastAPI runs in one warm container. The Nginx /ai/ proxy is
-            # configured once from deploy/nginx-ai.conf; this publish is local only.
-            # Cài Docker Engine + Compose v2 tự động ở lần deploy đầu tiên.
-            # Dùng sudo docker ở script deploy để không cần logout/login sau
-            # khi user ubuntu được thêm vào nhóm docker.
-            if ! command -v docker > /dev/null 2>&1; then
-              echo "Docker chưa có, đang cài Docker Engine và Compose plugin..."
-              sudo apt-get update
-              sudo apt-get install -y ca-certificates curl
-              sudo install -m 0755 -d /etc/apt/keyrings
-              sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-              sudo chmod a+r /etc/apt/keyrings/docker.asc
-              . /etc/os-release
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            # TensorFlow.js now runs in the browser. Remove the legacy YOLO
+            # inference image/container when this deployment reaches EC2.
+            if command -v docker > /dev/null 2>&1; then
+              AI_CONTAINER_IDS=$(sudo docker ps -aq --filter "ancestor=recycle-rewards-ai:latest")
+              if [ -n "$AI_CONTAINER_IDS" ]; then
+                sudo docker rm --force $AI_CONTAINER_IDS
+              fi
+              sudo docker image rm --force recycle-rewards-ai:latest 2>/dev/null || true
             fi
-            sudo systemctl enable --now docker
-            sudo docker compose version
-            cd "$REPO_DIR"
-            chmod +x deploy/deploy-ai.sh
-            ./deploy/deploy-ai.sh "$REPO_DIR"
+
           EOF
 
   # Job 2: Tự động build và deploy Frontend lên Firebase Hosting
@@ -121,7 +109,6 @@ jobs:
         working-directory: ./RecycleRewards_FE
         env:
           VITE_API_URL: https://recycle-rewards.duckdns.org/api
-          VITE_AI_API_URL: https://recycle-rewards.duckdns.org/ai
           VITE_BUILD_SHA: ${{ github.sha }}
         run: |
           npm install
