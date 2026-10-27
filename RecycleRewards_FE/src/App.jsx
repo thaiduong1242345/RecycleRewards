@@ -47,7 +47,7 @@ function Login({ login, emailLogin, register, notify }) {
     }
   }
   return <main className="login-page"><section className="login-panel"><div className="login-card">
-    <Logo /><div className="intro"><em>CÙNG TRƯỜNG MÌNH SỐNG XANH</em><h1>Chào mừng bạn trở lại</h1><p>Đăng nhập để tiếp tục hành trình tái chế.</p></div>
+    <Logo /><div className="intro"><em>CÙNG TRƯỜNG MÌNH SỐNG XANH</em><h1>Dự án đã dừng lại, cảm ơn bạn đã quan tâm.</h1><p>Đăng nhập để tiếp tục hành trình tái chế.</p></div>
     <GoogleLoginButton className="wide" signIn={login} onError={(error) => notify(error.message, 'error')} />
     <div className="divider">HOẶC DÙNG EMAIL</div>
     <div className="role-switch"><Button variant={mode === 'login' ? 'light active' : 'light'} onClick={() => setMode('login')}>Đăng nhập</Button><Button variant={mode === 'register' ? 'light active' : 'light'} onClick={() => setMode('register')}>Đăng ký</Button></div>
