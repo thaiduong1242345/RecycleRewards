@@ -1,101 +1,14 @@
-name: CI/CD Pipeline (Backend & Frontend)
+name: CI/CD Pipeline (Frontend Only)
 
 on:
   push:
     branches: [ "main", "dev" ]
 
 jobs:
-  # Job 1: Tự động deploy Backend lên AWS EC2
-  deploy-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup SSH Key
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: Connect and Update Backend on EC2
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
-          BRANCH: ${{ github.ref_name }}
-          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RECYCLE_REWARDS_2026 }}
-        run: |
-          SERVICE_ACCOUNT_B64=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" | base64 -w 0)
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "BRANCH='$BRANCH' ADMIN_EMAILS='$ADMIN_EMAILS' SERVICE_ACCOUNT_B64='$SERVICE_ACCOUNT_B64' bash -s" << 'EOF'
-            BACKEND_DIR=$(find ~ -type d -path "*/RecycleRewards_BE" 2>/dev/null | head -n 1)
-            
-            if [ -z "$BACKEND_DIR" ]; then
-              echo "Không tìm thấy thư mục RecycleRewards_BE trên EC2!"
-              exit 1
-            fi
-
-            REPO_DIR=$(git -C "$BACKEND_DIR" rev-parse --show-toplevel)
-            echo "Đang deploy repo: $REPO_DIR"
-            cd "$REPO_DIR"
-
-            git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-            git reset --hard "origin/$BRANCH"
-            cd "$BACKEND_DIR"
-            npm install
-
-            if [ -n "$SERVICE_ACCOUNT_B64" ]; then
-              printf '%s' "$SERVICE_ACCOUNT_B64" | base64 -d > "$BACKEND_DIR/firebase-service-account.json"
-            fi
-            export GOOGLE_APPLICATION_CREDENTIALS="$BACKEND_DIR/firebase-service-account.json"
-            
-            # Kiểm tra và tự động cài đặt PM2 nếu trên server chưa có
-            export PATH=$PATH:/home/ubuntu/.npm/bin:/usr/bin:/usr/local/bin
-            if ! command -v pm2 &> /dev/null; then
-              echo "PM2 chưa được cài đặt, đang tiến hành cài đặt..."
-              sudo npm install -g pm2
-            fi
-            
-            # Restart hoặc start mới app nếu chưa tồn tại process recycle-backend
-            export ADMIN_EMAILS="${ADMIN_EMAILS:-caothaiduongmcpe123@gmail.com}"
-            if pm2 describe recycle-backend > /dev/null 2>&1; then
-              pm2 restart recycle-backend --update-env
-            else
-              pm2 start server.js --name recycle-backend
-            fi
-            
-            pm2 save
-            # Fail the deployment with actionable diagnostics if Nginx would
-            # otherwise return a vague 502 because Node did not boot.
-            for attempt in $(seq 1 15); do
-              if curl --fail --silent http://127.0.0.1:5000/api/health > /dev/null; then
-                break
-              fi
-              if [ "$attempt" = "15" ]; then
-                echo "Recycle Node backend did not pass /api/health."
-                pm2 status
-                pm2 logs recycle-backend --lines 100 --nostream
-                exit 1
-              fi
-              sleep 2
-            done
-
-            # TensorFlow.js now runs in the browser. Remove the legacy YOLO
-            # inference image/container when this deployment reaches EC2.
-            if command -v docker > /dev/null 2>&1; then
-              AI_CONTAINER_IDS=$(sudo docker ps -aq --filter "ancestor=recycle-rewards-ai:latest")
-              if [ -n "$AI_CONTAINER_IDS" ]; then
-                sudo docker rm --force $AI_CONTAINER_IDS
-              fi
-              sudo docker image rm --force recycle-rewards-ai:latest 2>/dev/null || true
-            fi
-
-          EOF
-
-  # Job 2: Tự động build và deploy Frontend lên Firebase Hosting
+  # Tự động build và deploy Frontend lên Firebase Hosting
   deploy-frontend:
     runs-on: ubuntu-latest
-    needs: deploy-backend 
+    # Đã xóa 'needs: deploy-backend' để job này tự chạy luôn không cần chờ backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
